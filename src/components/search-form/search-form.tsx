@@ -63,9 +63,9 @@ const queryClient = new QueryClient();
 // который делает запросы, мы бы сохранили этот QueryClient на самом верхнем
 // уровне приложения, но поскольку у нас только один такой компонет, 
 // мы создаем его версию, обернутую в контекст.
-export default function SearchFormWithQueryClient() {
+export default function SearchFormWithQueryClient(props: SearchFormProps) {
   return <QueryClientProvider client={queryClient}>
-    <SearchForm />
+    <SearchForm {...props} />
   </QueryClientProvider>
 }
 
