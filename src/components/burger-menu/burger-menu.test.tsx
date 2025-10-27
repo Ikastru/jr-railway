@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
-import BurgerMenu from './burger-menu';
 import React from 'react';
+import BurgerMenu from './burger-menu';
 
 describe("Rendering", function () {
   it("Correctly renders trigger", function() {

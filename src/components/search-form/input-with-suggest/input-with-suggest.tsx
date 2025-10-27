@@ -2,7 +2,7 @@
 
 import styles from "./input-with-suggest.module.css";
 
-import { ChangeEvent, HTMLAttributes, useEffect, useState } from "react";
+import React, { ChangeEvent, HTMLAttributes, useEffect, useState } from "react";
 
 interface DataListOption {
   value: string,
@@ -14,28 +14,28 @@ interface OptionsState {
 }
 
 interface InputWithSuggestProps extends HTMLAttributes<HTMLInputElement> {
-  defaultOptions?: DataListOption[],
-  listId: string,
+  defaultOptions: readonly DataListOption[],
+  id: string,
+  loader?: (search: string) => Promise<readonly DataListOption[]>
+
+  // NB! Those values are added to interface
+  // due to lack of time on researching
+  // what interface to use as a parent
+  // to be able to pass stadrand input
+  // HTML attributes property. Needs
+  // further investigation.
   placeholder?: string,
-  type: "text",
-  name: string,
-  value: string,
+  name?: string,
+  value?: string,
 }
 
 export default function InputWithSuggest(props: InputWithSuggestProps) {
   const {
     className = "",
-    defaultOptions = [
-      { value: "Москва" },
-      { value: "Санкт Петербург" },
-      { value: "Нижний Новгород" },
-      { value: "Владивосток" },
-      { value: "Пекин" },
-      { value: "Берлин" },
-      { value: "Лондон" },
-    ],
-    listId,
-    onChange = () => {},
+    defaultOptions,
+    onChange = () => { },
+    loader = () => new Promise((res) => res(defaultOptions)),
+    id,
     ...rest
   } = props;
 
@@ -60,12 +60,11 @@ export default function InputWithSuggest(props: InputWithSuggestProps) {
       state: "loading",
     });
 
-    fetch(`/api/cities/?search=${inputValue}`)
-      .then((res) => res.json())
+    loader(inputValue)
       .then((data) => {
         setOptionsState({
           state: "idle",
-          data,
+          data: [...data],
         });
       });
   }, [inputValue]);
@@ -77,8 +76,19 @@ export default function InputWithSuggest(props: InputWithSuggestProps) {
   }
 
   return <>
-    <input className={`${className} ${styles.input} ${optionsState.state === "loading" ? styles.inputLoading : ``}`} autoCapitalize="off" autoComplete="off" autoCorrect="off" list={listId} {...rest} value={inputValue} onChange={handleInputChange} />
-    <datalist id={listId}>
+    <input
+      className={`${className} ${styles.input} ${optionsState.state === "loading" ? styles.inputLoading : ``}`}
+      autoCapitalize="off"
+      autoComplete="off"
+      autoCorrect="off"
+      type="text"
+      id={id}
+      list={`${id}-list`}
+      value={inputValue}
+      onChange={handleInputChange}
+      {...rest}
+    />
+    <datalist id={`${id}-list`}>
       {optionsState.data.map(({ value }) => <option value={value} key={value.replaceAll(" ", "-")} />)}
     </datalist>
   </>;

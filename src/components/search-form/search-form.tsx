@@ -19,8 +19,8 @@ type SearchDataReducerAction =
   | { type: "SET_DATE_DEPARTURE", payload: number }
   | { type: "SET_DATE_ARRIVAL", payload: number };
 
-function searchDataReducer(state: SearchData, {type, payload}: SearchDataReducerAction): SearchData {
-  switch(type) {
+function searchDataReducer(state: SearchData, { type, payload }: SearchDataReducerAction): SearchData {
+  switch (type) {
     case "SET_TRAVEL_TYPE":
       return { ...state, travelType: payload };
     case "SET_PASSENGERS":
@@ -42,7 +42,28 @@ interface SearchFormProps {
   defaultSearchData?: SearchData | null,
 }
 
+const DEFAULT_CITIES = Object.freeze([
+  { value: "Москва" },
+  { value: "Санкт Петербург" },
+  { value: "Нижний Новгород" },
+  { value: "Владивосток" },
+  { value: "Пекин" },
+  { value: "Берлин" },
+  { value: "Лондон" },
+]);
+
+const citiesLoader = async function (search: string) {
+  const citiesResponse = await fetch(`/api/cities/?search=${search}`);
+  const citiesData = await citiesResponse.json();
+  return citiesData;
+};
+
 export default function SearchForm({ defaultSearchData }: SearchFormProps) {
+  // TODO:
+  // 1. Изменить интерфейс SearchForm чтобы у нее появился прелоадер (для default cities)
+  // 2. Загрузить DefaultCities через citiesLoader
+  // 3. Описать это через tanstack
+
   const [searchData, dispatch] = useReducer(searchDataReducer, defaultSearchData ?? {
     travelType: TravelType.ROUND_TRIP,
     passengers: 2,
@@ -99,16 +120,16 @@ export default function SearchForm({ defaultSearchData }: SearchFormProps) {
       <label className={styles.searchFieldLabel}>Departure</label>
       <InputWithSuggest
         className={styles.searchInput}
+        defaultOptions={DEFAULT_CITIES}
         placeholder="Your City/Station"
-        type="text"
         id="search-departure"
-        listId="search-departure-values"
         name="search-departure"
         value={searchData.departure}
         onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
           type: "SET_DEPARTURE",
           payload: evt.target.value,
         })}
+        loader={citiesLoader}
       />
     </fieldset>
 
@@ -116,16 +137,16 @@ export default function SearchForm({ defaultSearchData }: SearchFormProps) {
       <label className={styles.searchFieldLabel}>Arrival</label>
       <InputWithSuggest
         className={styles.searchInput}
+        defaultOptions={DEFAULT_CITIES}
         placeholder="Where To?"
-        type="text"
         id="search-arrival"
-        listId="search-arrival-values"
         name="search-arrival"
         value={searchData.arrival}
         onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
           type: "SET_ARRIVAL",
           payload: evt.target.value,
         })}
+        loader={citiesLoader}
       />
     </fieldset>
 
