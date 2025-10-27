@@ -1,12 +1,9 @@
 "use client";
 
+import { DataListOption } from "../../types/data-list";
 import styles from "./input-with-suggest.module.css";
 
 import React, { ChangeEvent, HTMLAttributes, useEffect, useState } from "react";
-
-interface DataListOption {
-  value: string,
-}
 
 interface OptionsState {
   state: "loading" | "idle",

@@ -9,7 +9,9 @@ import { SearchData, TravelType } from "@/types/search-data";
 import getValidationMessages from "./get-validation-messages";
 import { now } from "@/helpers/round-date";
 import { formatToYYYYMMDD } from "@/helpers/date-format";
-import InputWithSuggest from "./input-with-suggest/input-with-suggest";
+import InputWithSuggest from "../input-with-suggest/input-with-suggest";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DataListOption } from "../../types/data-list";
 
 type SearchDataReducerAction =
   | { type: "SET_TRAVEL_TYPE", payload: TravelType }
@@ -42,28 +44,32 @@ interface SearchFormProps {
   defaultSearchData?: SearchData | null,
 }
 
-const DEFAULT_CITIES = Object.freeze([
-  { value: "Москва" },
-  { value: "Санкт Петербург" },
-  { value: "Нижний Новгород" },
-  { value: "Владивосток" },
-  { value: "Пекин" },
-  { value: "Берлин" },
-  { value: "Лондон" },
-]);
-
-const citiesLoader = async function (search: string) {
-  const citiesResponse = await fetch(`/api/cities/?search=${search}`);
-  const citiesData = await citiesResponse.json();
-  return citiesData;
+const citiesLoader = function (search: string) {
+  return fetch(`/api/cities/?search=${search}`)
+    .then((response) => response.json());
 };
 
-export default function SearchForm({ defaultSearchData }: SearchFormProps) {
-  // TODO:
-  // 1. Изменить интерфейс SearchForm чтобы у нее появился прелоадер (для default cities)
-  // 2. Загрузить DefaultCities через citiesLoader
-  // 3. Описать это через tanstack
 
+// Механизм работы c TanStack Query. Все запросы делаются
+// объектом, который создается через конструктор QueryClient.
+// Поэтому первым делом нужно создать такой объект.
+const queryClient = new QueryClient();
+
+// Этот объект используется для отправки запросов по всему приложению
+// и хуки используют этот объект, поэтому должен существовать некий
+// контекст, который дает доступ к этому объекту. Контекст создается
+// внутри объекта QueryClient, а провайдер для него — 
+// в теге <QueryClientProvider>. Если бы у нас было больше одного компонента,
+// который делает запросы, мы бы сохранили этот QueryClient на самом верхнем
+// уровне приложения, но поскольку у нас только один такой компонет, 
+// мы создаем его версию, обернутую в контекст.
+export default function SearchFormWithQueryClient() {
+  return <QueryClientProvider client={queryClient}>
+    <SearchForm />
+  </QueryClientProvider>
+}
+
+function SearchForm({ defaultSearchData }: SearchFormProps) {
   const [searchData, dispatch] = useReducer(searchDataReducer, defaultSearchData ?? {
     travelType: TravelType.ROUND_TRIP,
     passengers: 2,
@@ -76,6 +82,33 @@ export default function SearchForm({ defaultSearchData }: SearchFormProps) {
   const validationMessages = useMemo(() => {
     return getValidationMessages(searchData);
   }, [searchData]);
+
+  // Теперь мы можем пользоваться хуками для запросов. Таких хуков много,
+  // но нам пригодятся два — useQuery и useQueryClient.
+  // Хук useQuery нужен для того, чтобы сделать запрос к данным пока
+  // компонент загружается. Этот хук возвращает состояние загрузки
+  // и полученные данные
+  const { isPending: isPreloading, data: queriedDefaultCities = [] as readonly DataListOption[] } = useQuery<readonly DataListOption[]>({
+    queryKey: ["cities", ""],
+    // Для запроса пользуемся обычным fetch
+    queryFn: () => citiesLoader("") as Promise<readonly DataListOption[]>,
+  });
+
+  // Хук useQueryClient позволяет отправлять кастомные запросы 
+  // в любой момент времени...
+  const queryClient = useQueryClient();
+
+  // ...поэтому на основе объекта, который возвращается из этого хука
+  // мы создадим загрузчик для наших инпутов и этот загрузчик
+  // будет заниматься запросами на сервер...
+  const loader = async function (search: string): Promise<readonly DataListOption[]> {
+    return queryClient.fetchQuery<readonly DataListOption[]>({
+      queryKey: ["cities", search],
+      // ...с помощью той же самой функции, которой мы загружаем и исходные
+      // данные.
+      queryFn: () => citiesLoader(search) as Promise<readonly DataListOption[]>,
+    });
+  };
 
   return <form className={styles.search} method="GET" action="/search">
     <fieldset className={`${styles.searchField} ${styles.searchFieldInline}`}>
@@ -118,36 +151,46 @@ export default function SearchForm({ defaultSearchData }: SearchFormProps) {
 
     <fieldset className={styles.searchField}>
       <label className={styles.searchFieldLabel}>Departure</label>
-      <InputWithSuggest
-        className={styles.searchInput}
-        defaultOptions={DEFAULT_CITIES}
-        placeholder="Your City/Station"
-        id="search-departure"
-        name="search-departure"
-        value={searchData.departure}
-        onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
-          type: "SET_DEPARTURE",
-          payload: evt.target.value,
-        })}
-        loader={citiesLoader}
-      />
+      {
+        // Ну и остается только добавить пару прелоадеров на этапе
+        // исходной загрузки списка популярных городов
+        isPreloading
+          ? <input type="text" className={styles.searchInput} disabled placeholder="Loading cities..." />
+          : <InputWithSuggest
+            className={styles.searchInput}
+            defaultOptions={queriedDefaultCities}
+            placeholder={"Your City/Station"}
+            id="search-departure"
+            name="search-departure"
+            value={searchData.departure}
+            onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
+              type: "SET_DEPARTURE",
+              payload: evt.target.value,
+            })}
+            loader={loader}
+          />
+      }
     </fieldset>
 
     <fieldset className={styles.searchField}>
       <label className={styles.searchFieldLabel}>Arrival</label>
-      <InputWithSuggest
-        className={styles.searchInput}
-        defaultOptions={DEFAULT_CITIES}
-        placeholder="Where To?"
-        id="search-arrival"
-        name="search-arrival"
-        value={searchData.arrival}
-        onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
-          type: "SET_ARRIVAL",
-          payload: evt.target.value,
-        })}
-        loader={citiesLoader}
-      />
+      {
+        isPreloading
+          ? <input type="text" className={styles.searchInput} disabled placeholder="Loading cities..." />
+          : <InputWithSuggest
+              className={styles.searchInput}
+              defaultOptions={queriedDefaultCities}
+              placeholder={"Where To?"}
+              id="search-arrival"
+              name="search-arrival"
+              value={searchData.arrival}
+              onChange={(evt: ChangeEvent<HTMLInputElement>) => dispatch({
+                type: "SET_ARRIVAL",
+                payload: evt.target.value,
+              })}
+              loader={loader}
+            />
+      }
     </fieldset>
 
     <fieldset className={styles.searchField}>
